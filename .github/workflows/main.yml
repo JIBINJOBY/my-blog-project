@@ -69,7 +69,7 @@ jobs:
   deploy_to_aks:
     name: Deploy to AKS with Ansible
     runs-on: ubuntu-latest
-    needs: [build_and_push_docker, run_terraform] # Run AFTER build and terraform
+    needs: [build_and_push_docker] # Run AFTER build and terraform
     
     steps:
       - name: Check out code

@@ -16,6 +16,7 @@
       kubernetes.core.k8s:
         state: present
         src: "{{ lookup('env', 'GITHUB_WORKSPACE') }}/k8s/{{ item }}"
+        namespace: default
       loop:
         - 00-secrets.yaml
         - 01-posts-service.yaml

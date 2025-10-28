@@ -3,48 +3,17 @@ name: Build and Deploy Micro-Blog
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
 
 env:
-  # Set these from your Terraform output
   AZURE_RG_NAME: "myblog-rg" 
   AZURE_AKS_NAME: "myblog-aks"
-  AZURE_ACR_NAME: "myblogacr98756jibin.azurecr.io" # This is the ACR Login Server
+  AZURE_ACR_NAME: "myblogacr98756jibin.azurecr.io"
 
 jobs:
-  build_and_push_docker:
-    name: Build and Push Docker Images
-    runs-on: ubuntu-latest
-    needs: [run_terraform]
-    
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      - name: Log in to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }} # MUST set this secret in GitHub
-
-      - name: Log in to Azure Container Registry
-        uses: azure/docker-login@v1
-        with:
-          login-server: ${{ env.AZURE_ACR_NAME }}
-          username: ${{ secrets.ACR_USERNAME }}  # MUST set these secrets
-          password: ${{ secrets.ACR_PASSWORD }}  # (Get from ACR -> Access Keys)
-          
-      - name: Build and push posts-service
-        run: |
-          docker build -t ${{ env.AZURE_ACR_NAME }}/posts-service:latest ./services/posts-service
-          docker push ${{ env.AZURE_ACR_NAME }}/posts-service:latest
-          
-      - name: Build and push frontend
-        run: |
-          docker build -t ${{ env.AZURE_ACR_NAME }}/frontend:latest ./services/frontend
-          docker push ${{ env.AZURE_ACR_NAME }}/frontend:latest
-
+  # JOB 1: RUNS FIRST
   run_terraform:
-    name: Provision Infrastructure with Terraform
+    name: 1. Provision Infrastructure
     runs-on: ubuntu-latest
     
     steps:
@@ -67,10 +36,44 @@ jobs:
         run: terraform apply -auto-approve
         working-directory: ./infra
 
-  deploy_to_aks:
-    name: Deploy to AKS with Ansible
+  # JOB 2: RUNS SECOND
+  build_and_push_docker:
+    name: 2. Build and Push Images
     runs-on: ubuntu-latest
-    needs: [build_and_push_docker] # Run AFTER build and terraform
+    needs: [run_terraform]  # <-- This makes it wait for Job 1
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # --- THIS IS THE CRITICAL FIX ---
+      # It no longer uses username/password.
+      # It will auto-use the credentials from the "Log in to Azure" step.
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.AZURE_ACR_NAME }}
+          
+      - name: Build and push posts-service
+        run: |
+          docker build -t ${{ env.AZURE_ACR_NAME }}/posts-service:latest ./services/posts-service
+          docker push ${{ env.AZURE_ACR_NAME }}/posts-service:latest
+          
+      - name: Build and push frontend
+        run: |
+          docker build -t ${{ env.AZURE_ACR_NAME }}/frontend:latest ./services/frontend
+          docker push ${{ env.AZURE_ACR_NAME }}/frontend:latest
+
+  # JOB 3: RUNS LAST
+  deploy_to_aks:
+    name: 3. Deploy to AKS
+    runs-on: ubuntu-latest
+    needs: [build_and_push_docker] # <-- This makes it wait for Job 2
     
     steps:
       - name: Check out code
@@ -86,7 +89,7 @@ jobs:
           pip install ansible
           pip install kubernetes
           ansible-galaxy collection install azure.azcollection
-
+          
       - name: Get AKS Credentials
         run: |
           az aks get-credentials --resource-group ${{ env.AZURE_RG_NAME }} --name ${{ env.AZURE_AKS_NAME }} --overwrite-existing

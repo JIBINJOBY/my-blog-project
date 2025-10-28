@@ -85,6 +85,10 @@ jobs:
           pip install ansible
           pip install kubernetes
           ansible-galaxy collection install azure.azcollection
+
+      - name: Get AKS Credentials
+        run: |
+          az aks get-credentials --resource-group ${{ env.AZURE_RG_NAME }} --name ${{ env.AZURE_AKS_NAME }} --overwrite-existing
           
       - name: Run Ansible Playbook
         run: ansible-playbook ansible/playbook.yml

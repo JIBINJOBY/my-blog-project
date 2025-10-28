@@ -43,6 +43,9 @@ jobs:
         id: tf_apply # Give this step an ID
         run: terraform apply -auto-approve
         working-directory: ./infra
+
+        -name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
       
       # This new step gets the outputs from Terraform
       - name: Get Terraform Outputs

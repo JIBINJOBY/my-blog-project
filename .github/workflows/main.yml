@@ -1,0 +1,90 @@
+name: Build and Deploy Micro-Blog
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Allows manual triggering
+
+env:
+  # Set these from your Terraform output
+  AZURE_RG_NAME: "myblog-rg" 
+  AZURE_AKS_NAME: "myblog-aks"
+  AZURE_ACR_NAME: "myblogacr98756jibin.azurecr.io" # This is the ACR Login Server
+
+jobs:
+  build_and_push_docker:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }} # MUST set this secret in GitHub
+
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.AZURE_ACR_NAME }}
+          username: ${{ secrets.ACR_USERNAME }}  # MUST set these secrets
+          password: ${{ secrets.ACR_PASSWORD }}  # (Get from ACR -> Access Keys)
+          
+      - name: Build and push posts-service
+        run: |
+          docker build -t ${{ env.AZURE_ACR_NAME }}/posts-service:latest ./services/posts-service
+          docker push ${{ env.AZURE_ACR_NAME }}/posts-service:latest
+          
+      - name: Build and push frontend
+        run: |
+          docker build -t ${{ env.AZURE_ACR_NAME }}/frontend:latest ./services/frontend
+          docker push ${{ env.AZURE_ACR_NAME }}/frontend:latest
+
+  run_terraform:
+    name: Provision Infrastructure with Terraform
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./infra
+        
+      - name: Terraform Apply
+        run: terraform apply -auto-approve
+        working-directory: ./infra
+
+  deploy_to_aks:
+    name: Deploy to AKS with Ansible
+    runs-on: ubuntu-latest
+    needs: [build_and_push_docker, run_terraform] # Run AFTER build and terraform
+    
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        
+      - name: Log in to Azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Ansible and K8s tools
+        run: |
+          pip install ansible
+          pip install kubernetes
+          ansible-galaxy collection install azure.azcollection
+          
+      - name: Run Ansible Playbook
+        run: ansible-playbook ansible/playbook.yml

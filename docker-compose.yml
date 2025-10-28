@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  posts-service:
+    build: ./services/posts-service
+    ports:
+      - "5001:5001" # Map your laptop's port 5001 to the container's port 5001
+  
+  frontend:
+    build: ./services/frontend
+    ports:
+      - "8081:80" # Map your laptop's port 8080 to the container's port 80

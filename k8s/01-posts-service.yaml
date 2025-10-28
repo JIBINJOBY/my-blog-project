@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: posts-service-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: posts-service
+  template:
+    metadata:
+      labels:
+        app: posts-service
+    spec:
+      containers:
+      - name: posts-service
+        # !! IMPORTANT: This is a placeholder! !!
+        # GitHub Actions will replace this with your ACR name
+        image: myblogacr98756jibin.azurecr.io/posts-service:latest
+        ports:
+        - containerPort: 5001
+        envFrom:
+        - secretRef:
+            name: blog-secrets # Loads the DB_PASSWORD from our Secret file
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: posts-service
+spec:
+  type: ClusterIP # Only reachable inside the cluster
+  selector:
+    app: posts-service
+  ports:
+  - port: 5001
+    targetPort: 5001

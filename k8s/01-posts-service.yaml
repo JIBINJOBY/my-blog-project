@@ -14,18 +14,17 @@ spec:
     spec:
       containers:
       - name: posts-service
-        # !! IMPORTANT: This is a placeholder! !!
-        # GitHub Actions will replace this with your ACR name
         image: myblogacr98756jibin.azurecr.io/posts-service:latest
         ports:
         - containerPort: 5001
-        
-        env: # Changed from envFrom
-      - name: DB_CONNECTION_STRING # Define the environment variable name
-        valueFrom:
-          secretKeyRef:
-           name: blog-secrets       # The name of the Secret object
-           key: DB_CONNECTION_STRING # The key within the Secret
+        # --- Start Environment Variables ---
+        env:
+        - name: DB_CONNECTION_STRING # Define the environment variable name
+          valueFrom:
+            secretKeyRef:
+              name: blog-secrets       # The name of the Secret object
+              key: DB_CONNECTION_STRING # The key within the Secret
+        # --- End Environment Variables ---
 ---
 apiVersion: v1
 kind: Service

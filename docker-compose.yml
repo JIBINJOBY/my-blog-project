@@ -4,7 +4,7 @@ services:
     build: ./services/posts-service
     ports:
       - "5001:5001" # Map your laptop's port 5001 to the container's port 5001
-  
+    
   frontend:
     build: ./services/frontend
     ports:

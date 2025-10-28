@@ -11,11 +11,16 @@ env:
   AZURE_ACR_NAME: "myblogacr98756jibin.azurecr.io"
 
 jobs:
-  # JOB 1: RUNS FIRST
+  # JOB 1: RUNS FIRST & CREATES PASSWORDS
   run_terraform:
     name: 1. Provision Infrastructure
     runs-on: ubuntu-latest
     
+    # This section EXPORTS the outputs for other jobs to use
+    outputs:
+      ACR_USERNAME: ${{ steps.tf_outputs.outputs.ACR_USERNAME }}
+      ACR_PASSWORD: ${{ steps.tf_outputs.outputs.ACR_PASSWORD }}
+
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -33,31 +38,35 @@ jobs:
         working-directory: ./infra
         
       - name: Terraform Apply
+        id: tf_apply # Give this step an ID
         run: terraform apply -auto-approve
         working-directory: ./infra
+      
+      # This new step gets the outputs from Terraform
+      - name: Get Terraform Outputs
+        id: tf_outputs
+        run: |
+          echo "ACR_USERNAME=$(terraform output -raw acr_admin_username)" >> $GITHUB_OUTPUT
+          echo "ACR_PASSWORD=$(terraform output -raw acr_admin_password)" >> $GITHUB_OUTPUT
+        working-directory: ./infra
 
-  # JOB 2: RUNS SECOND
+  # JOB 2: RUNS SECOND & USES PASSWORDS
   build_and_push_docker:
     name: 2. Build and Push Images
     runs-on: ubuntu-latest
-    needs: [run_terraform]  # <-- This makes it wait for Job 1
+    needs: [run_terraform]  # Waits for Job 1 to finish
     
     steps:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Log in to Azure
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      # --- THIS IS THE CRITICAL FIX ---
-      # It no longer uses username/password.
-      # It will auto-use the credentials from the "Log in to Azure" step.
       - name: Log in to Azure Container Registry
         uses: azure/docker-login@v1
         with:
           login-server: ${{ env.AZURE_ACR_NAME }}
+          # This is the fix: It uses the outputs from the job above
+          username: ${{ needs.run_terraform.outputs.ACR_USERNAME }}
+          password: ${{ needs.run_terraform.outputs.ACR_PASSWORD }}
           
       - name: Build and push posts-service
         run: |
@@ -73,7 +82,8 @@ jobs:
   deploy_to_aks:
     name: 3. Deploy to AKS
     runs-on: ubuntu-latest
-    needs: [build_and_push_docker] # <-- This makes it wait for Job 2
+    # This waits for BOTH previous jobs to be 100% complete
+    needs: [run_terraform, build_and_push_docker] 
     
     steps:
       - name: Check out code

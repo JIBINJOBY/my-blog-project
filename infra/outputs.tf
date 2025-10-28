@@ -18,3 +18,13 @@ output "db_connection_string" {
   value     = "postgresql://${azurerm_postgresql_flexible_server.db.administrator_login}:${azurerm_postgresql_flexible_server.db.administrator_password}@${azurerm_postgresql_flexible_server.db.fqdn}/posts_db?sslmode=require"
   sensitive = true
 }
+
+output "acr_admin_username" {
+  value     = azurerm_container_registry.acr.admin_username
+  sensitive = true
+}
+
+output "acr_admin_password" {
+  value     = azurerm_container_registry.acr.admin_password
+  sensitive = true
+}

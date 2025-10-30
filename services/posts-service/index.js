@@ -1,9 +1,11 @@
 // services/posts-service/index.js
 const express = require('express');
 const { Pool } = require('pg'); // PostgreSQL client
+const cors = require('cors');
 
 const app = express();
 app.use(express.json()); // Middleware to parse JSON request bodies
+app.use(cors());
 const port = 5001;
 
 // --- Database Connection ---

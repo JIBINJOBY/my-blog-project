@@ -24,7 +24,7 @@ kind: Service
 metadata:
   name: frontend-service
 spec:
-  type: LoadBalancer # Only reachable inside the cluster
+  type: ClusterIP # Only reachable inside the cluster
   selector:
     app: frontend
   ports:

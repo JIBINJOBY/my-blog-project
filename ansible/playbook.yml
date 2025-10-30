@@ -7,15 +7,22 @@
       debug:
         msg: "Azure login is assumed to be done."
 
-    # --- ADD THIS NEW TASK ---
-    - name: Install Nginx Ingress Controller
-      command: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
-      changed_when: false # This command always reports 'changed', so we override it
-    # --- END NEW TASK ---
-        
+    # STEP 1: Get credentials so kubectl works
     - name: Get AKS cluster credentials
       command: az aks get-credentials --resource-group {{ lookup('env', 'AZURE_RG_NAME') }} --name {{ lookup('env', 'AZURE_AKS_NAME') }} --overwrite-existing
       
+    # STEP 2: Install the Ingress Controller
+    - name: Install Nginx Ingress Controller
+      command: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+      changed_when: false # This command always reports 'changed', so we override it
+
+    # --- NEW STEP 3: Wait for Ingress pods to be ready ---
+    - name: Wait for Nginx Ingress Controller pods to be ready
+      command: kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=300s
+      changed_when: false
+    # --- END NEW TASK ---
+        
+    # STEP 4: Deploy your application
     - name: Deploy Kubernetes manifests
       kubernetes.core.k8s:
         state: present

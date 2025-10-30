@@ -6,24 +6,22 @@ metadata:
     # This annotation is still needed for the rewrite rule
     nginx.ingress.kubernetes.io/rewrite-target: /$2 
 spec:
-  # --- THIS IS THE FIX ---
   # This line explicitly tells Kubernetes to use the 'nginx' controller
   ingressClassName: nginx
-  # --- END OF FIX ---
   rules:
   - http:
       paths:
       # Rule 1: Backend API
       # Requests to /api/posts go to posts-service:5001/posts
       - path: /api(/|$)(.*)
-        pathType: Prefix
+        pathType: ImplementationSpecific  # <-- THIS IS THE FIX
         backend:
           service:
             name: posts-service
             port:
               number: 5001
       
-      # Rule 2: Frontend App
+      # Rule 2: Frontend App (This one is fine with Prefix)
       # All other requests (e.g., /) go to frontend-service:80
       - path: /
         pathType: Prefix

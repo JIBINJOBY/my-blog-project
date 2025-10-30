@@ -3,11 +3,13 @@ kind: Ingress
 metadata:
   name: blog-ingress
   annotations:
-    # We are using the Nginx Ingress Controller
-    kubernetes.io.ingress.class: nginx 
-    # This rule rewrites /api/posts to just /posts for the backend
+    # This annotation is still needed for the rewrite rule
     nginx.ingress.kubernetes.io/rewrite-target: /$2 
 spec:
+  # --- THIS IS THE FIX ---
+  # This line explicitly tells Kubernetes to use the 'nginx' controller
+  ingressClassName: nginx
+  # --- END OF FIX ---
   rules:
   - http:
       paths:

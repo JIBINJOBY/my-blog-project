@@ -14,8 +14,8 @@ spec:
     spec:
       containers:
       - name: frontend
-        # !! IMPORTANT: This is a placeholder! !!
         image: myblogacr98756jibin.azurecr.io/frontend:latest
+        imagePullPolicy: Always  # <-- THIS IS THE FIX
         ports:
         - containerPort: 80
 ---
@@ -24,7 +24,7 @@ kind: Service
 metadata:
   name: frontend-service
 spec:
-  type: ClusterIP # Only reachable inside the cluster
+  type: ClusterIP # This is correct
   selector:
     app: frontend
   ports:

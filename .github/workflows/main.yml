@@ -1,4 +1,4 @@
-name: Build and Deploy Micro-Blog
+name: Build and Deploy Application
 
 on:
   push:
@@ -6,79 +6,54 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_RG_NAME: "myblog-rg"
+  AZURE_RG_NAME: "myblog-rg" 
   AZURE_AKS_NAME: "myblog-aks"
-  # NOTE: The ACR name must be globally unique
   AZURE_ACR_NAME: "myblogacr98756jibin.azurecr.io"
 
 jobs:
-  # JOB 1: RUNS FIRST
-  run_terraform:
-    name: 1. Provision Infrastructure
+  # JOB 1: Build and Push Images
+  build_and_push_docker:
+    name: 1. Build and Push Images
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Log in to Azure (Needed for Terraform)
+      - name: Log in to Azure
+        id: azure_login
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_wrapper: false # Keep this fix!
-
-      - name: Terraform Init
-        run: terraform init
-        working-directory: ./infra
-
-      - name: Terraform Apply
-        run: terraform apply -auto-approve
-        working-directory: ./infra
-
-  # JOB 2: RUNS SECOND
-  build_and_push_docker:
-    name: 2. Build and Push Images
-    runs-on: ubuntu-latest
-    needs: [run_terraform] # Waits for infrastructure to be ready
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v3
-
-      # --- THIS IS THE NEW, RELIABLE LOGIN ---
-      # Uses the standard Docker login action with SP credentials
       - name: Log in to Azure Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.AZURE_ACR_NAME }}
           username: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
           password: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
-
+          
       - name: Build and push posts-service
         run: |
           docker build -t ${{ env.AZURE_ACR_NAME }}/posts-service:latest ./services/posts-service
           docker push ${{ env.AZURE_ACR_NAME }}/posts-service:latest
-
+          
       - name: Build and push frontend
         run: |
           docker build -t ${{ env.AZURE_ACR_NAME }}/frontend:latest ./services/frontend
           docker push ${{ env.AZURE_ACR_NAME }}/frontend:latest
 
-  # JOB 3: RUNS LAST
+  # JOB 2: Deploy to AKS
   deploy_to_aks:
-    name: 3. Deploy to AKS
+    name: 2. Deploy to AKS
     runs-on: ubuntu-latest
-    needs: [build_and_push_docker] # Waits for images to be pushed
-
+    needs: [build_and_push_docker] # <-- This now waits ONLY for the build
+    
     steps:
       - name: Check out code
         uses: actions/checkout@v3
-
-      - name: Log in to Azure (Needed for AKS/Ansible)
+        
+      - name: Log in to Azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
@@ -88,10 +63,18 @@ jobs:
           pip install ansible
           pip install kubernetes
           ansible-galaxy collection install azure.azcollection
-
+          
       - name: Get AKS Credentials
         run: |
           az aks get-credentials --resource-group ${{ env.AZURE_RG_NAME }} --name ${{ env.AZURE_AKS_NAME }} --overwrite-existing
+      
+      - name: Install Nginx Ingress Controller (if not present)
+        command: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+        changed_when: false
 
+      - name: Wait for Nginx Ingress Controller
+        command: kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=300s
+        changed_when: false
+          
       - name: Run Ansible Playbook
         run: ansible-playbook ansible/playbook.yml
